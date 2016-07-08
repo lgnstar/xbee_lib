@@ -2,8 +2,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
-#define warn(s) xbee->uart->warn(xbee->uart->ptr, s)
 #define write(buf, nbyte) xbee->uart->write(xbee->uart->ptr, buf, nbyte)
 #define read(buf, nbyte) xbee->uart->read(xbee->uart->ptr, buf, nbyte)
 
@@ -32,7 +32,8 @@ static int xbee_init(xbee_interface_t * xbee)
     return 0;
 }
 
-int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, size_t recv_buffer_size, void * recv_buffer)
+int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, 
+        size_t recv_buffer_size, void * recv_buffer)
 {
     assert(xbee);
     assert(uart);
@@ -55,7 +56,8 @@ int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, size_t recv
 #define XBEE_XOFF 0x13
 
 /*! Writes bytes with escaping */
-static int xbee_write_bytes(xbee_interface_t * xbee, size_t nbytes, const void * buf, uint8_t *accum)
+static int xbee_write_bytes(xbee_interface_t * xbee, 
+        size_t nbytes, const void * buf, uint8_t *accum)
 {
     assert(xbee);
     assert(buf);
@@ -71,7 +73,9 @@ static int xbee_write_bytes(xbee_interface_t * xbee, size_t nbytes, const void *
     {
         *accum += bytes[i];
 
-        if(bytes[i] == XBEE_FRAME_DELIM || bytes[i] == XBEE_FRAME_ESCAPE || bytes[i] == XBEE_XON || bytes[i] == XBEE_XOFF)
+        if(bytes[i] == XBEE_FRAME_DELIM || 
+           bytes[i] == XBEE_FRAME_ESCAPE || 
+           bytes[i] == XBEE_XON || bytes[i] == XBEE_XOFF)
         {
             /* Write everything up to the escaped byte */
             size_t to_write = i-off;
@@ -104,7 +108,8 @@ static int xbee_write_bytes(xbee_interface_t * xbee, size_t nbytes, const void *
     return 0;
 }
 
-static int xbee_start_frame(xbee_interface_t * xbee, uint16_t total_frame_length, uint8_t * accum)
+static int xbee_start_frame(xbee_interface_t * xbee, 
+        uint16_t total_frame_length, uint8_t * accum)
 {
     assert(xbee);
     assert(accum);
@@ -134,7 +139,8 @@ static int xbee_finish_frame(xbee_interface_t * xbee, uint8_t accum)
     return xbee_write_bytes(xbee, 1, &accum, &dummy);
 }
 
-int xbee_send_frame(xbee_interface_t * xbee, size_t frame_size, const void * frame_data)
+int xbee_send_frame(xbee_interface_t * xbee, 
+        size_t frame_size, const void * frame_data)
 {
     uint8_t accum;
     int ret = xbee_start_frame(xbee, frame_size, &accum);
@@ -180,7 +186,8 @@ static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
 #define XBEE_ERR_FOUND_START (-1)
 #define XBEE_NOT_ENOUGH_DATA (-2)
 
-static int xbee_get_next_byte(xbee_interface_t * xbee, size_t *idx, uint8_t * byte_out)
+static int xbee_get_next_byte(xbee_interface_t * xbee, 
+        size_t *idx, uint8_t * byte_out)
 {
     if(*idx >= xbee->recv_size)
     {
@@ -218,7 +225,8 @@ static int xbee_get_next_byte(xbee_interface_t * xbee, size_t *idx, uint8_t * by
     }
 }
 
-static int xbee_decode_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame_out)
+static int xbee_decode_frame(xbee_interface_t * xbee, 
+        size_t frame_out_size, void * frame_out)
 {
     assert(xbee->recv_size <= xbee->recv_max_size);
 
@@ -260,7 +268,9 @@ static int xbee_decode_frame(xbee_interface_t * xbee, size_t frame_out_size, voi
 
         /* Buffer starts with XBEE_FRAME_DELIM */
         uint16_t length = len1 << 8 | len2;
-        size_t required_bytes = length + 4; /* 1 for start delim, 2 for length, 1 for checksum */ 
+
+        /* 1 for start delim, 2 for length, 1 for checksum */
+        size_t required_bytes = length + 4;  
         if(required_bytes > xbee->recv_max_size || length+1 > frame_out_size)
         {
             /* FIXME: Handle overflow better */
@@ -333,7 +343,9 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
         xbee->recv_size += ret;
     }
 
-    if(ret == read_len && read_end != xbee->recv_idx && xbee->recv_size < xbee->recv_max_size)
+    if(ret == read_len &&  /* First read complete */
+       read_end != xbee->recv_idx && /* Buffer is not full */
+       xbee->recv_size < xbee->recv_max_size /* Buffer is not full */ )
     {
         size_t read = ret;
 
@@ -356,7 +368,8 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
     }
 }
 
-int xbee_recv_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame_out)
+int xbee_recv_frame(xbee_interface_t * xbee, 
+        size_t frame_out_size, void * frame_out)
 {
     int ret = xbee_decode_frame(xbee, frame_out_size, frame_out);
 
@@ -369,22 +382,15 @@ int xbee_recv_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame
     ret = xbee_fill_buffer(xbee);
     if(ret < 0)
     { 
-        if(errno == EAGAIN)
-        {
-            return 0;
-        }
-        else
-        {
-            /* Some other error reading data */
-            return ret;
-        }
+        return ret;
     }
 
     return xbee_decode_frame(xbee, frame_out_size, frame_out);
 }
 
 int xbee_at_command(xbee_interface_t * xbee, 
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param)
+        uint8_t frame_id, char * at_command, 
+        size_t param_size, const void * param)
 {
     uint8_t accum;
     int ret = xbee_start_frame(xbee, 4+param_size, &accum);
@@ -415,7 +421,8 @@ int xbee_at_command(xbee_interface_t * xbee,
 }
 
 int xbee_at_queue_parameter(xbee_interface_t * xbee, 
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param)
+        uint8_t frame_id, char * at_command, 
+        size_t param_size, const void * param)
 {
     uint8_t accum;
     int ret = xbee_start_frame(xbee, 4+param_size, &accum);
@@ -447,7 +454,8 @@ int xbee_at_queue_parameter(xbee_interface_t * xbee,
 
 int xbee_remote_at_command(xbee_interface_t * xbee, 
         const xbee_address_t * address, uint8_t options,
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param)
+        uint8_t frame_id, char * at_command, 
+        size_t param_size, const void * param)
 {
     uint8_t accum;
     int ret = xbee_start_frame(xbee, 15+param_size, &accum);
@@ -507,7 +515,9 @@ int xbee_remote_at_command(xbee_interface_t * xbee,
     return xbee_finish_frame(xbee, accum);
 }
 
-int xbee_transmit(xbee_interface_t * xbee, uint8_t frame_id, const xbee_address_t * address, uint8_t option, size_t data_size, const void * data)
+int xbee_transmit(xbee_interface_t * xbee, uint8_t frame_id, 
+        const xbee_address_t * address, uint8_t option, 
+        size_t data_size, const void * data)
 {
     uint8_t accum;
     if(address->type == XBEE_16_BIT || address->type == XBEE_16_BIT_BROADCAST)
@@ -589,7 +599,8 @@ int xbee_transmit(xbee_interface_t * xbee, uint8_t frame_id, const xbee_address_
     return xbee_finish_frame(xbee, accum);
 }
 
-int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame, size_t frame_size, const void * frame)
+int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame,
+        size_t frame_size, const void * frame)
 {
     assert(parsed_frame);
 

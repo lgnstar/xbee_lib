@@ -47,6 +47,8 @@ typedef struct {
  *
  * \param[out] xbee New structure to xbee
  * \param[in] uart Pointer to initialized UART interface 
+ * \param recv_buffer_size Size of receive buffer.  
+ *      Recommend buffer of more than 234 bytes
  *
  * \return 0 for success, X otherwise
  */
