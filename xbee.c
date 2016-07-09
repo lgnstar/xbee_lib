@@ -60,6 +60,21 @@ static int xbee_init(xbee_interface_t * xbee)
 
     xbee->uart->sleep(1);
 
+    uint8_t check[3];
+    for(size_t i = 0; i < 4; ++i)
+    {
+        ret = read(check, sizeof(check));
+        if(ret != sizeof(check))
+        {
+            return -8;
+        }
+
+        if(memcmp("OK\r", check, sizeof(check)) != 0)
+        {
+            return -9;
+        }
+    }
+
     char expected_return[][5] = {
         "\x01""AP\x02",
         "\x02""D7\x01",
