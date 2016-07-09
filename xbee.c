@@ -18,7 +18,7 @@
  *
  * The first operation (force into AT command mode) will fail if the
  * baud rate of the serial interface does not match XBee's baud rate.
- * Call of xbee_open is responsible for initial matching the host and 
+ * Caller of xbee_open is responsible for initial matching the host and 
  * XBee's baud rate, as there is not a way via the serial port to
  * sync to the XBee.
  *
