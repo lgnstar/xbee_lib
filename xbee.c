@@ -3,6 +3,9 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef DEBUG
+#include <stdio.h>
+#endif
 
 #define write(buf, nbyte) xbee->uart->write(xbee->uart->ptr, buf, nbyte)
 #define read(buf, nbyte) xbee->uart->read(xbee->uart->ptr, buf, nbyte)
@@ -22,11 +25,84 @@ static int xbee_init(xbee_interface_t * xbee)
     }
     xbee->uart->sleep(XBEE_GUARD_TIME);
 
-    char api_seq[] = "ATAP 0\r";
+    char buf[3];
+    ret = read(buf, sizeof(buf));
+    if(ret != sizeof(buf) || buf[0] != 'O' || buf[1] != 'K' || buf[2] != '\r')
+    {
+        return -1;
+    }
+
+    /* Enable API mode with escaping, and bidirectional hardware flow control */
+    char api_seq[] = "ATAP 2\rATD7 1\rATD6 1\rATCN\r";
     ret = write(api_seq, sizeof(api_seq)-1);
     if(ret != sizeof(api_seq)-1)
     {
         return ret;
+    }
+
+    ret = xbee_at_command(xbee, 1, "AP", 0, api_seq);
+    if(ret != 0)
+    {
+        return ret;
+    }
+
+    ret = xbee_at_command(xbee, 2, "D7", 0, api_seq);
+    if(ret != 0)
+    {
+        return ret;
+    }
+
+    ret = xbee_at_command(xbee, 3, "D6", 0, api_seq);
+    if(ret != 0)
+    {
+        return ret;
+    }
+
+    xbee->uart->sleep(1);
+
+    char expected_return[][5] = {
+        "\x01""AP\x02",
+        "\x02""D7\x01",
+        "\x03""D6\x01",
+    };
+
+    uint8_t frame[9];
+    for(size_t i = 0; i < sizeof(expected_return)/sizeof(expected_return[0]); ++i)
+    {
+        ret = xbee_recv_frame(xbee, sizeof(frame), frame);
+        if(ret < 1)
+        {
+            return -2;
+        }
+
+        xbee_parsed_frame_t f;
+        ret = xbee_parse_frame(&f, ret, frame);
+        if(ret != 0)
+        {
+            return -3;
+        }
+
+        if(f.api_id != XBEE_AT_RESPONSE)
+        {
+            return -4;
+        }
+
+        if(f.frame_id != expected_return[i][0] ||
+           f.frame.at_command_response.at_command[0] != expected_return[i][1] ||
+           f.frame.at_command_response.at_command[1] != expected_return[i][2])
+        {
+            return -5;
+        }
+
+        if(f.frame.at_command_response.data_size != 1)
+        {
+            return -6;
+        }
+
+        if(f.frame.at_command_response.data[0] != expected_return[i][3])
+        {
+            return -7;
+        }
     }
 
     return 0;
@@ -306,6 +382,12 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
 
         if(accum == 0xFF)
         {
+            xbee->recv_idx += idx;
+            if(xbee->recv_idx > xbee->recv_max_size)
+            {
+                xbee->recv_idx = 0;
+            }
+            xbee->recv_size -= idx;
             return length;
         }
         else
@@ -319,6 +401,21 @@ next:
 
     return 0;
 }
+
+#if DEBUG 
+static void xbee_dump_recv_buffer(xbee_interface_t * xbee)
+{
+    for(size_t i = 0; i < xbee->recv_size; ++i)
+    {
+        printf("%02x", xbee_get_byte(xbee, i));
+        if((i+1) % 32 == 0)
+        {
+            printf("\n");
+        }
+    }
+    printf("\n%zu bytes total\n", xbee->recv_size);
+}
+#endif
 
 static int xbee_fill_buffer(xbee_interface_t * xbee)
 {
@@ -341,6 +438,10 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
     if(ret > 0)
     {
         xbee->recv_size += ret;
+#if DEBUG
+        printf("Got %d bytes\n", ret);
+        xbee_dump_recv_buffer(xbee);
+#endif
     }
 
     if(ret == read_len &&  /* First read complete */
@@ -358,6 +459,10 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
         {
             xbee->recv_size += ret;
             read += ret;
+#if DEBUG
+            printf("Got %d bytes\n", ret);
+            xbee_dump_recv_buffer(xbee);
+#endif
         }
 
         return read;

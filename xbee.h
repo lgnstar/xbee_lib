@@ -4,19 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef enum {
-    XBEE_B9600 = 9600, /*! XBee default baud rate */
-    XBEE_B115200 = 115200,
-} xbee_uart_baud_rate_t;
-
 #ifndef XBEE_GUARD_TIME
 #define XBEE_GUARD_TIME 2
 #endif /* XBEE_GUARD_TIME */
 
 typedef int (*xbee_write_fun_t)(void * ptr, const void *buf, size_t nbyte);
 typedef int (*xbee_read_fun_t)(void * ptr, void *buf, size_t nbyte);
-typedef int (*xbee_set_baud_rate_t)(xbee_uart_baud_rate_t baudrate);
-typedef void (*xbee_sleep_t)(int sec);
+typedef unsigned (*xbee_sleep_t)(unsigned sec);
 
 /*! xbee_uart_interface_t provides an abstration to a uart interface
  *
@@ -30,7 +24,6 @@ typedef struct {
 
     xbee_write_fun_t write;             /*! Write bytes to UART, conform to posix write interface */
     xbee_read_fun_t read;               /*! Read bytes from UART, conform to posix read interface */
-    xbee_set_baud_rate_t set_baud_rate; /*! Set baud rate \ret 0 success, non-zero error */
     xbee_sleep_t sleep;
 } xbee_uart_interface_t;
 
@@ -43,12 +36,16 @@ typedef struct {
     size_t recv_size;
 } xbee_interface_t;
 
+
+#define XBEE_REC_BUF_SIZE (234)
+#define XBEE_MAX_FRAME_SIZE (117)
+
 /*! Opens XBee via provided uart interface
  *
  * \param[out] xbee New structure to xbee
  * \param[in] uart Pointer to initialized UART interface 
  * \param recv_buffer_size Size of receive buffer.  
- *      Recommend buffer of more than 234 bytes
+ *      Recommend buffer of more than 234 bytes (XBEE_REC_BUF_SIZE)
  *
  * \return 0 for success, X otherwise
  */
