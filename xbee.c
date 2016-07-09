@@ -10,8 +10,22 @@
 #define write(buf, nbyte) xbee->uart->write(xbee->uart->ptr, buf, nbyte)
 #define read(buf, nbyte) xbee->uart->read(xbee->uart->ptr, buf, nbyte)
 
+/*! Configures XBee to match library expectations
+ *
+ * This library assumes that XBee is being used with hardware flow 
+ * control and all accesses are done with API mode.  xbee_init sets
+ * API mode and hardware flow control.
+ *
+ * The first operation (force into AT command mode) will fail if the
+ * baud rate of the serial interface does not match XBee's baud rate.
+ * Call of xbee_open is responsible for initial matching the host and 
+ * XBee's baud rate, as there is not a way via the serial port to
+ * sync to the XBee.
+ *
+ */
 static int xbee_init(xbee_interface_t * xbee)
 {
+    /* Force XBee into AT command mode */
     char c = '+';
     xbee->uart->sleep(XBEE_GUARD_TIME);
     int ret;
@@ -25,6 +39,7 @@ static int xbee_init(xbee_interface_t * xbee)
     }
     xbee->uart->sleep(XBEE_GUARD_TIME);
 
+    /* Should return "OK\r" if entered AT command mode */
     char buf[3];
     ret = read(buf, sizeof(buf));
     if(ret != sizeof(buf) || buf[0] != 'O' || buf[1] != 'K' || buf[2] != '\r')
@@ -32,7 +47,8 @@ static int xbee_init(xbee_interface_t * xbee)
         return -1;
     }
 
-    /* Enable API mode with escaping, and bidirectional hardware flow control */
+    /* Enable API mode with escaping (AP 2), and bidirectional hardware flow control  (D7 1, D6 1)
+     * Apply settings afterwards (CN) */
     char api_seq[] = "ATAP 2\rATD7 1\rATD6 1\rATCN\r";
     ret = write(api_seq, sizeof(api_seq)-1);
     if(ret != sizeof(api_seq)-1)
@@ -40,6 +56,7 @@ static int xbee_init(xbee_interface_t * xbee)
         return ret;
     }
 
+    /* Check that we are in API mode and flow control bits were set */
     ret = xbee_at_command(xbee, 1, "AP", 0, api_seq);
     if(ret != 0)
     {
@@ -58,8 +75,11 @@ static int xbee_init(xbee_interface_t * xbee)
         return ret;
     }
 
+    /* 1 second is more than enough for al AT command responses to have arrived assuming there
+     * is buffering on the host */
     xbee->uart->sleep(1);
 
+    /* Verify each AT command (including CN) were OK'd */
     uint8_t check[3];
     for(size_t i = 0; i < 4; ++i)
     {
@@ -75,6 +95,7 @@ static int xbee_init(xbee_interface_t * xbee)
         }
     }
 
+    /* Check that each AT response matches expected value */
     char expected_return[][5] = {
         "\x01""AP\x02",
         "\x02""D7\x01",
@@ -164,6 +185,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
     {
         *accum += bytes[i];
 
+        /* Check if this byte needs to be escaped */
         if(bytes[i] == XBEE_FRAME_DELIM || 
            bytes[i] == XBEE_FRAME_ESCAPE || 
            bytes[i] == XBEE_XON || bytes[i] == XBEE_XOFF)
@@ -397,6 +419,7 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
 
         if(accum == 0xFF)
         {
+            /* Found a good frame, remove from buffer now that it is copied out */
             xbee->recv_idx += idx;
             if(xbee->recv_idx > xbee->recv_max_size)
             {
