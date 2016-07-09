@@ -44,6 +44,36 @@ void hexdump(size_t n, void * ptr)
     printf("\n");
 }
 
+int set_baud_rate(xbee_interface_t * xbee, int speed)
+{
+    int fd = *((int*)xbee->uart->ptr);
+
+    struct termios tty;
+    memset (&tty, 0, sizeof tty);
+    if (tcgetattr (fd, &tty) != 0)
+    {
+        printf("error %d from tcgetattr\nstrerror = %s\n", errno, strerror(errno));
+        return -1;
+    }
+
+    if(cfsetospeed (&tty, speed) != 0)
+    {
+        printf("error %d from cfsetospeed\nstrerror = %s\n", errno, strerror(errno));
+        return -1;
+    }
+    if(cfsetispeed (&tty, speed) != 0)
+    {
+        printf("error %d from cfsetispeed\nstrerror = %s\n", errno, strerror(errno));
+        return -1;
+    }
+
+    if (tcsetattr (fd, TCSANOW, &tty) != 0)
+    {
+        printf("error %d from tcsetattr\nstrerror = %s\n", errno, strerror(errno));
+        return -1;
+    }
+
+}
 
 void test_xbee(xbee_interface_t * xbee)
 {
@@ -75,6 +105,27 @@ void test_xbee(xbee_interface_t * xbee)
         printf("error writing frame, ret = %d, errno = %d\n", ret, errno);
         return;
     }
+
+    sleep(1);
+
+    ret = xbee_recv_frame(xbee, sizeof(frame), frame);
+    if(ret < 0)
+    {
+        printf("error getting frame, ret = %d, errno = %d\n", ret, errno);
+        return;
+    }
+
+    printf("Got frame of %d length\n", ret);
+    hexdump(ret, frame);
+
+    ret = xbee_at_command(xbee, 1, "AC", 0, buf);
+    if(ret < 0)
+    {
+        printf("error writing frame, ret = %d, errno = %d\n", ret, errno);
+        return;
+    }
+
+    set_baud_rate(xbee, B19200);
 
     sleep(1);
 
@@ -135,7 +186,7 @@ int main(int argc, char * argv[])
         return -1;
     }
 
-    int speed = B19200;
+    int speed = B9600;
     if(cfsetospeed (&tty, speed) != 0)
     {
         printf("error %d from cfsetospeed\nstrerror = %s\n", errno, strerror(errno));
