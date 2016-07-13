@@ -34,7 +34,7 @@ static int xbee_init(xbee_interface_t * xbee)
         ret = write(&c, 1);
         if(ret != 1)
         {
-            return ret;
+            return -1;
         }
     }
     xbee->uart->sleep(XBEE_GUARD_TIME);
@@ -151,7 +151,7 @@ int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart,
     assert(uart);
     assert(recv_buffer);
 
-    memset(xbee, 0, sizeof(xbee));
+    memset(xbee, 0, sizeof(*xbee));
 
     xbee->uart = uart;
     xbee->recv_max_size = recv_buffer_size;
@@ -195,7 +195,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
             ret = write(buf+off, to_write);
             if(ret != to_write)
             {
-                return ret;
+                return -4;
             }
 
             escape_buf[1] = bytes[i] ^ 0x20;
@@ -203,7 +203,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
             ret = write(escape_buf, sizeof(escape_buf));
             if(ret != sizeof(escape_buf))
             {
-                return ret;
+                return -5;
             }
 
             off = i+1;
@@ -215,7 +215,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
     ret = write(buf+off, to_write);
     if(ret != to_write)
     {
-        return ret;
+        return -6;
     }
 
     return 0;
@@ -231,7 +231,7 @@ static int xbee_start_frame(xbee_interface_t * xbee,
     int ret = write(&c, 1);
     if(ret != 1)
     {
-        return ret;
+        return -7;
     }
 
     *accum = 0;
@@ -274,7 +274,7 @@ int xbee_send_frame(xbee_interface_t * xbee,
 static inline void xbee_drop_byte(xbee_interface_t * xbee)
 {
     xbee->recv_idx += 1;
-    if(xbee->recv_idx > xbee->recv_max_size)
+    if(xbee->recv_idx >= xbee->recv_max_size)
     {
         xbee->recv_idx = 0;
     }
@@ -288,7 +288,7 @@ static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
     assert(xbee->recv_idx < xbee->recv_max_size);
     
     size_t idx = i + xbee->recv_idx;
-    if(idx > xbee->recv_max_size)
+    if(idx >= xbee->recv_max_size)
     {
         idx -= xbee->recv_max_size;
     }
@@ -421,7 +421,7 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
         {
             /* Found a good frame, remove from buffer now that it is copied out */
             xbee->recv_idx += idx;
-            if(xbee->recv_idx > xbee->recv_max_size)
+            if(xbee->recv_idx >= xbee->recv_max_size)
             {
                 xbee->recv_idx = 0;
             }
@@ -753,7 +753,7 @@ int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame,
         return XBEE_WRONG_LENGTH_FOR_API;
     }
 
-    memset(parsed_frame, 0, sizeof(parsed_frame));
+    memset(parsed_frame, 0, sizeof(*parsed_frame));
     parsed_frame->api_id = b[0];
 
     uint64_t addr;
