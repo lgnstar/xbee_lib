@@ -44,7 +44,7 @@ static int xbee_init(xbee_interface_t * xbee)
     ret = read(buf, sizeof(buf));
     if(ret != sizeof(buf) || buf[0] != 'O' || buf[1] != 'K' || buf[2] != '\r')
     {
-        return -1;
+        return -2;
     }
 
     /* Enable API mode with escaping (AP 2), and bidirectional hardware flow control  (D7 1, D6 1)
@@ -53,7 +53,7 @@ static int xbee_init(xbee_interface_t * xbee)
     ret = write(api_seq, sizeof(api_seq)-1);
     if(ret != sizeof(api_seq)-1)
     {
-        return ret;
+        return -3;
     }
 
     /* Check that we are in API mode and flow control bits were set */
@@ -86,12 +86,12 @@ static int xbee_init(xbee_interface_t * xbee)
         ret = read(check, sizeof(check));
         if(ret != sizeof(check))
         {
-            return -8;
+            return -4;
         }
 
         if(memcmp("OK\r", check, sizeof(check)) != 0)
         {
-            return -9;
+            return -5;
         }
     }
 
@@ -108,36 +108,36 @@ static int xbee_init(xbee_interface_t * xbee)
         ret = xbee_recv_frame(xbee, sizeof(frame), frame);
         if(ret < 1)
         {
-            return -2;
+            return -6;
         }
 
         xbee_parsed_frame_t f;
         ret = xbee_parse_frame(&f, ret, frame);
         if(ret != 0)
         {
-            return -3;
+            return -7;
         }
 
         if(f.api_id != XBEE_AT_RESPONSE)
         {
-            return -4;
+            return -8;
         }
 
         if(f.frame_id != expected_return[i][0] ||
            f.frame.at_command_response.at_command[0] != expected_return[i][1] ||
            f.frame.at_command_response.at_command[1] != expected_return[i][2])
         {
-            return -5;
+            return -9;
         }
 
         if(f.frame.at_command_response.data_size != 1)
         {
-            return -6;
+            return -10;
         }
 
         if(f.frame.at_command_response.data[0] != expected_return[i][3])
         {
-            return -7;
+            return -10;
         }
     }
 
@@ -195,7 +195,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
             ret = write(buf+off, to_write);
             if(ret != to_write)
             {
-                return -4;
+                return -11;
             }
 
             escape_buf[1] = bytes[i] ^ 0x20;
@@ -203,7 +203,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
             ret = write(escape_buf, sizeof(escape_buf));
             if(ret != sizeof(escape_buf))
             {
-                return -5;
+                return -12;
             }
 
             off = i+1;
@@ -215,7 +215,7 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
     ret = write(buf+off, to_write);
     if(ret != to_write)
     {
-        return -6;
+        return -13;
     }
 
     return 0;
@@ -231,7 +231,7 @@ static int xbee_start_frame(xbee_interface_t * xbee,
     int ret = write(&c, 1);
     if(ret != 1)
     {
-        return -7;
+        return -14;
     }
 
     *accum = 0;
