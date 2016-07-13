@@ -760,13 +760,23 @@ int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame,
     switch(parsed_frame->api_id)
     {
     case XBEE_MODEM_STATUS:
-    case XBEE_TRANSMIT_STATUS:
         if(frame_size != 2)
         {
             return XBEE_WRONG_LENGTH_FOR_API;
         }
 
         parsed_frame->frame.status = b[1];
+
+        return 0;
+        break;
+    case XBEE_TRANSMIT_STATUS:
+        if(frame_size != 3)
+        {
+            return XBEE_WRONG_LENGTH_FOR_API;
+        }
+
+        parsed_frame->frame_id = b[1];
+        parsed_frame->frame.status = b[2];
 
         return 0;
         break;
