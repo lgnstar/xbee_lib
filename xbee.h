@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef SPECIAL_SECTION
+#define SPECIAL_SECTION
+#endif
+
 #ifndef XBEE_GUARD_TIME
 #define XBEE_GUARD_TIME 2
 #endif /* XBEE_GUARD_TIME */
@@ -49,7 +53,7 @@ typedef struct {
  *
  * \return 0 for success, X otherwise
  */
-int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, size_t recv_buffer_size, void * recv_buffer);
+int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, size_t recv_buffer_size, void * recv_buffer) SPECIAL_SECTION;
 
 /*! Sends frame to XBee
  *
@@ -60,7 +64,7 @@ int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart, size_t recv
  * \return 0 indicates frame was successfully written, otherwise returns error code from xbee_write_fun_t
  *
  */
-int xbee_send_frame(xbee_interface_t * xbee, size_t frame_size, const void * frame_data);
+int xbee_send_frame(xbee_interface_t * xbee, size_t frame_size, const void * frame_data) SPECIAL_SECTION;
 
 /*! Receives frame from XBee
  *
@@ -72,7 +76,7 @@ int xbee_send_frame(xbee_interface_t * xbee, size_t frame_size, const void * fra
  *        >0 indicates frame was read and was output in frame_out
  *        <0 indicates error reading data, and returns error code from xbee_read_fun_t
  */
-int xbee_recv_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame_out);
+int xbee_recv_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame_out) SPECIAL_SECTION;
 
 typedef enum {
     /* Commands */
@@ -111,12 +115,12 @@ typedef struct {
  * \param frame_id Frame id in transmit response, 0 to disable response
  */
 int xbee_at_command(xbee_interface_t * xbee, 
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param);
+        uint8_t frame_id, char * at_command, size_t param_size, const void * param) SPECIAL_SECTION;
 int xbee_at_queue_parameter(xbee_interface_t * xbee, 
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param);
+        uint8_t frame_id, char * at_command, size_t param_size, const void * param) SPECIAL_SECTION;
 int xbee_remote_at_command(xbee_interface_t * xbee, 
         const xbee_address_t * address, uint8_t options,
-        uint8_t frame_id, char * at_command, size_t param_size, const void * param);
+        uint8_t frame_id, char * at_command, size_t param_size, const void * param) SPECIAL_SECTION;
 
 #define XBEE_DISABLE_ACK        (0x01)
 #define XBEE_BROADCAST_PAN_ID   (0x04)
@@ -126,7 +130,7 @@ int xbee_remote_at_command(xbee_interface_t * xbee,
  * \param frame_id Frame id in transmit response, 0 to disable response
  * \param option Either XBEE_DISABLE_ACK or XBEE_BROADCAST_PAN_ID
  * */
-int xbee_transmit(xbee_interface_t * xbee, uint8_t frame_id, const xbee_address_t * address, uint8_t option, size_t data_size, const void * data);
+int xbee_transmit(xbee_interface_t * xbee, uint8_t frame_id, const xbee_address_t * address, uint8_t option, size_t data_size, const void * data) SPECIAL_SECTION;
 
 typedef struct {
     xbee_api_id_t api_id;
@@ -166,7 +170,7 @@ typedef struct {
  * \return Returns 0 if api_id is recongnized and expect length matches.
  *         Returns XBEE_UNKNOWN_API_ID or XBEE_WRONG_LENGTH_FOR_API otherwise
  */
-int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame, size_t frame_size, const void * frame);
+int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame, size_t frame_size, const void * frame) SPECIAL_SECTION;
 
 
 #endif /* _XBEE_H_ */

@@ -23,10 +23,15 @@
  * sync to the XBee.
  *
  */
+static int xbee_init(xbee_interface_t * xbee) SPECIAL_SECTION;
 static int xbee_init(xbee_interface_t * xbee)
 {
+	/* Drain input buffer */
+	char c;
+    while(read(&c, 1) > 0) {}
+
     /* Force XBee into AT command mode */
-    char c = '+';
+    c = '+';
     xbee->uart->sleep(XBEE_GUARD_TIME);
     int ret;
     for(int i = 0; i < 3; ++i)
@@ -169,6 +174,8 @@ int xbee_open(xbee_interface_t * xbee, xbee_uart_interface_t * uart,
 
 /*! Writes bytes with escaping */
 static int xbee_write_bytes(xbee_interface_t * xbee, 
+        size_t nbytes, const void * buf, uint8_t *accum) SPECIAL_SECTION;
+static int xbee_write_bytes(xbee_interface_t * xbee, 
         size_t nbytes, const void * buf, uint8_t *accum)
 {
     assert(xbee);
@@ -222,6 +229,8 @@ static int xbee_write_bytes(xbee_interface_t * xbee,
 }
 
 static int xbee_start_frame(xbee_interface_t * xbee, 
+        uint16_t total_frame_length, uint8_t * accum) SPECIAL_SECTION;
+static int xbee_start_frame(xbee_interface_t * xbee, 
         uint16_t total_frame_length, uint8_t * accum)
 {
     assert(xbee);
@@ -245,6 +254,7 @@ static int xbee_start_frame(xbee_interface_t * xbee,
     return ret;
 }
 
+static int xbee_finish_frame(xbee_interface_t * xbee, uint8_t accum) SPECIAL_SECTION;
 static int xbee_finish_frame(xbee_interface_t * xbee, uint8_t accum)
 {
     uint8_t dummy = 0;
@@ -271,6 +281,7 @@ int xbee_send_frame(xbee_interface_t * xbee,
     return xbee_finish_frame(xbee, accum);
 }
 
+static inline void xbee_drop_byte(xbee_interface_t * xbee) SPECIAL_SECTION;
 static inline void xbee_drop_byte(xbee_interface_t * xbee)
 {
     xbee->recv_idx += 1;
@@ -281,6 +292,7 @@ static inline void xbee_drop_byte(xbee_interface_t * xbee)
     xbee->recv_size -= 1;
 }
 
+static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i) SPECIAL_SECTION;
 static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
 {
     assert(xbee);
@@ -299,6 +311,8 @@ static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
 #define XBEE_ERR_FOUND_START (-1)
 #define XBEE_NOT_ENOUGH_DATA (-2)
 
+static int xbee_get_next_byte(xbee_interface_t * xbee, 
+        size_t *idx, uint8_t * byte_out) SPECIAL_SECTION;
 static int xbee_get_next_byte(xbee_interface_t * xbee, 
         size_t *idx, uint8_t * byte_out)
 {
@@ -338,6 +352,8 @@ static int xbee_get_next_byte(xbee_interface_t * xbee,
     }
 }
 
+static int xbee_decode_frame(xbee_interface_t * xbee, 
+        size_t frame_out_size, void * frame_out) SPECIAL_SECTION;
 static int xbee_decode_frame(xbee_interface_t * xbee, 
         size_t frame_out_size, void * frame_out)
 {
@@ -455,6 +471,7 @@ static void xbee_dump_recv_buffer(xbee_interface_t * xbee)
 }
 #endif
 
+static int xbee_fill_buffer(xbee_interface_t * xbee) SPECIAL_SECTION;
 static int xbee_fill_buffer(xbee_interface_t * xbee)
 {
     assert(xbee->recv_size < xbee->recv_max_size);
