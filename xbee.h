@@ -172,5 +172,7 @@ typedef struct {
  */
 int xbee_parse_frame(xbee_parsed_frame_t * parsed_frame, size_t frame_size, const void * frame) SPECIAL_SECTION;
 
+int xbee_decode_frame(xbee_interface_t * xbee, size_t frame_out_size, void * frame_out) SPECIAL_SECTION;
+int xbee_fill_buffer(xbee_interface_t * xbee) SPECIAL_SECTION;
 
 #endif /* _XBEE_H_ */

@@ -3,12 +3,22 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 #ifdef DEBUG
 #include <stdio.h>
 #endif
 
 #define write(buf, nbyte) xbee->uart->write(xbee->uart->ptr, buf, nbyte)
 #define read(buf, nbyte) xbee->uart->read(xbee->uart->ptr, buf, nbyte)
+
+static inline void xbee_check(xbee_interface_t * xbee)
+{
+    assert(xbee);
+    assert(xbee->recv);
+    assert(xbee->recv_idx < xbee->recv_max_size);
+    assert(xbee->recv_size <= xbee->recv_max_size);
+}
 
 /*! Configures XBee to match library expectations
  *
@@ -284,6 +294,9 @@ int xbee_send_frame(xbee_interface_t * xbee,
 static inline void xbee_drop_byte(xbee_interface_t * xbee) SPECIAL_SECTION;
 static inline void xbee_drop_byte(xbee_interface_t * xbee)
 {
+    xbee_check(xbee);
+    assert(xbee->recv_size > 0);
+
     xbee->recv_idx += 1;
     if(xbee->recv_idx >= xbee->recv_max_size)
     {
@@ -295,15 +308,16 @@ static inline void xbee_drop_byte(xbee_interface_t * xbee)
 static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i) SPECIAL_SECTION;
 static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
 {
-    assert(xbee);
+    xbee_check(xbee);
     assert(i < xbee->recv_size);
-    assert(xbee->recv_idx < xbee->recv_max_size);
     
     size_t idx = i + xbee->recv_idx;
     if(idx >= xbee->recv_max_size)
     {
         idx -= xbee->recv_max_size;
     }
+
+    assert(idx < xbee->recv_max_size);
 
     return xbee->recv[idx];
 }
@@ -312,10 +326,14 @@ static inline uint8_t xbee_get_byte(xbee_interface_t * xbee, size_t i)
 #define XBEE_NOT_ENOUGH_DATA (-2)
 
 static int xbee_get_next_byte(xbee_interface_t * xbee, 
-        size_t *idx, uint8_t * byte_out) SPECIAL_SECTION;
+        size_t * const idx, uint8_t * const byte_out) SPECIAL_SECTION;
 static int xbee_get_next_byte(xbee_interface_t * xbee, 
-        size_t *idx, uint8_t * byte_out)
+        size_t * const idx, uint8_t * const byte_out)
 {
+    xbee_check(xbee);
+    assert(idx);
+    assert(byte_out);
+
     if(*idx >= xbee->recv_size)
     {
         return XBEE_NOT_ENOUGH_DATA;
@@ -352,9 +370,20 @@ static int xbee_get_next_byte(xbee_interface_t * xbee,
     }
 }
 
-static int xbee_decode_frame(xbee_interface_t * xbee, 
-        size_t frame_out_size, void * frame_out) SPECIAL_SECTION;
-static int xbee_decode_frame(xbee_interface_t * xbee, 
+static bool xbee_find_if_have_next_delim(xbee_interface_t * xbee)
+{
+    for(size_t i = 1; i < xbee->recv_size; ++i)
+    {
+        if(xbee_get_byte(xbee, i) == XBEE_FRAME_DELIM)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int xbee_decode_frame(xbee_interface_t * xbee, 
         size_t frame_out_size, void * frame_out)
 {
     assert(xbee->recv_size <= xbee->recv_max_size);
@@ -368,7 +397,7 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
      * 1+ data bytes
      * 1 checksum
      *
-     * Using 6 also meanss xbee_get_next_byte for len1 and len2 will never fail
+     * Using 6 also means xbee_get_next_byte for len1 and len2 will never fail
      * due to lack of data, only other errors.
      * */
     while(xbee->recv_size >= 6)
@@ -417,7 +446,13 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
                 {
                     /* FIXME: Handle overflow better */
                     xbee_drop_byte(xbee);
-                    goto next;
+                    continue;
+                }
+                else if(xbee_find_if_have_next_delim(xbee))
+                {
+                    /* Check if we have a packet behind this one */
+                    xbee_drop_byte(xbee);
+                    continue;
                 }
                 else
                 {
@@ -427,7 +462,7 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
             else if(ret != 0)
             {
                 xbee_drop_byte(xbee);
-                goto next;
+                continue;
             }
 
             accum += bytes_out[i];
@@ -439,7 +474,7 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
             xbee->recv_idx += idx;
             if(xbee->recv_idx >= xbee->recv_max_size)
             {
-                xbee->recv_idx = 0;
+                xbee->recv_idx -= xbee->recv_max_size;
             }
             xbee->recv_size -= idx;
             return length;
@@ -449,8 +484,6 @@ static int xbee_decode_frame(xbee_interface_t * xbee,
             xbee_drop_byte(xbee);
             continue;
         }
-next:
-        continue;
     }
 
     return 0;
@@ -471,10 +504,9 @@ static void xbee_dump_recv_buffer(xbee_interface_t * xbee)
 }
 #endif
 
-static int xbee_fill_buffer(xbee_interface_t * xbee) SPECIAL_SECTION;
-static int xbee_fill_buffer(xbee_interface_t * xbee)
+int xbee_fill_buffer(xbee_interface_t * xbee)
 {
-    assert(xbee->recv_size < xbee->recv_max_size);
+    xbee_check(xbee);
 
     size_t read_start = xbee->recv_idx + xbee->recv_size;
     size_t read_end;
@@ -488,7 +520,12 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
         read_end = xbee->recv_idx;
     }
 
+    assert(read_start >= 0 && read_start < xbee->recv_max_size);
+    assert(read_end > read_start && read_end <= xbee->recv_max_size);
+
     size_t read_len = read_end - read_start;
+    assert(read_start+read_len <= xbee->recv_max_size);
+
     int ret = read(xbee->recv+read_start, read_len);
     if(ret > 0)
     {
@@ -508,6 +545,11 @@ static int xbee_fill_buffer(xbee_interface_t * xbee)
         read_start = 0; 
         read_end = xbee->recv_idx;
         read_len = read_end - read_start;
+
+        assert(read_start >= 0 && read_start < xbee->recv_max_size);
+        assert(read_end > read_start && read_end <= xbee->recv_max_size);
+        assert(read_start+read_len <= xbee->recv_max_size);
+
         ret = read(xbee->recv+read_start, read_len);
 
         if(ret > 0)
